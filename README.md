@@ -56,12 +56,12 @@ Paso 6 lo realiza ```librosa.util.localmax``` para detectar máximos y ```libros
 
 ## 7. Validación
 
-Figura de mérito. Contar manualmente disparos en Audacity y comparar con los obtenidos con Librosa.
+Armar figura de mérito. Contar manualmente disparos en Audacity y comparar con el gráfico obtenido con Librosa.
 
 ## 8. Autores
 
 * **Lucas Cabral** ([@lmc2098](https://github.com))
-* **Justo Gonzalez Litardo** ([@jutogl](https://github.com))
+* **Justo Gonzalez Litardo** ([@justogl](https://github.com))
 
 ## 9. Licencia
 

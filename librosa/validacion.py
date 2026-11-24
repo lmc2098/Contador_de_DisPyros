@@ -3,9 +3,11 @@ import numpy as np
 
 import librosa
 
-# Carga de archivo
+# Carga de archivo de audio
 archivo = "audios/Audio 1 - Recorte Damian Kuc - Recortado.mp3"
 y, sr = librosa.load(archivo, sr=None)
+
+# Carga de archivo con etiquetas de disparos detectados manualmente
 etiquetas = np.loadtxt("audios/Masacre de Ramallo - Test/Audio 1 - Etiquetas.txt", dtype=str, delimiter="\t")
 etiqueta = np.array([float(x) for x in etiquetas[:,0]])
 
@@ -22,6 +24,7 @@ onset_peaks = librosa.util.localmax(onset_env)
 onset_detect = librosa.onset.onset_detect(onset_envelope=onset_env)
 
 print(f"Cantidad de disparos detectados: {len(onset_detect)}")
+print(f"Cantidad de disparos efectuados: {len(etiqueta)}")
 
 # Visualizacion de resultados
 fig, ax = plt.subplots(nrows=2, sharex=True, height_ratios=(3, 1))
@@ -42,7 +45,7 @@ ax[0].scatter(
     marker="o",
     edgecolor="C2",
     facecolor="none",
-    label="onset_detect",
+    label="Disparos detectados",
 )
 ax[0].vlines(
     etiqueta,
@@ -50,7 +53,8 @@ ax[0].vlines(
     ymax=max(onset_env[onset_peaks]),
     color='red',
     linestyle='dashed',
-    linewidth=1
+    linewidth=1,
+    label='Disparos Efectuados'
 )
 ax[0].legend()
 ax[0].label_outer()

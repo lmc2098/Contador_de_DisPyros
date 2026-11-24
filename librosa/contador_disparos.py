@@ -26,7 +26,7 @@ fig, ax = plt.subplots(nrows=2, sharex=True, height_ratios=(3, 1))
 
 librosa.display.waveshow(y=y, sr=sr, ax=ax[1], label="Waveform")
 ax[1].legend()
-ax[0].plot(times, onset_env, label="Onset envelope", color="C1")
+ax[0].plot(times, onset_env, color="C1")
 ax[0].scatter(
     times[onset_peaks],
     onset_env[onset_peaks],
@@ -40,7 +40,7 @@ ax[0].scatter(
     marker="o",
     edgecolor="C2",
     facecolor="none",
-    label="onset_detect",
+    label="Disparos",
 )
 ax[0].legend()
 ax[0].label_outer()

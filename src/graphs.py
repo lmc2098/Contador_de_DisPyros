@@ -60,15 +60,13 @@ def reproductor_interactivo(ruta_audio, ruta_csv):
     def actualizar_puntos_grafico():
         otros = df_global[df_global['clasificacion'] == 'otro']
         disparos = df_global[df_global['clasificacion'] == 'posible_disparo']
-        
+
         with fig.batch_update():
             fig.data[1].x = otros['tiempo_segundos']
             fig.data[1].y = np.zeros(len(otros))
-            fig.data[1].text = [f"{p:.4f}" for p in otros['puntaje']]
             
             fig.data[2].x = disparos['tiempo_segundos']
             fig.data[2].y = np.zeros(len(disparos))
-            fig.data[2].text = [f"{p:.4f}" for p in disparos['puntaje']]
 
     actualizar_puntos_grafico()
 

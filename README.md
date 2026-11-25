@@ -10,8 +10,52 @@ Desarrollar una herramienta capaz de complementar pericias de escenas con dispar
 
 ## 3. Instalación
 
-Es requerimiento contar con las librerías Numpy, Matplotlib y Librosa.
-Colocar versión de Python y requirements.txt??
+Este proyecto utiliza las siguientes librerías de Python:
+
+* numpy
+* matplotlib
+* librosa
+
+**Opción 1: usando uv**
+
+1. Crear un entorno virtual:
+
+uv venv
+
+2. Activar el entorno:
+
+*Linux/macOS*
+
+source .venv/bin/activate
+
+*Windows (PowerShell)*
+
+.venv\Scripts\Activate.ps1
+
+3. Instalar las dependencias:
+
+uv pip install numpy matplotlib librosa
+
+**Opción 2: usando Conda**
+
+1. Crear un entorno nuevo:
+
+conda create -n audio-env python=3.12
+
+2. Activar el entorno:
+
+conda activate audio-env
+
+3. Instalar las dependencias:
+
+conda install numpy matplotlib
+pip install librosa
+
+4. Verificación
+
+Comprobar que las librerías se instalaron correctamente:
+
+python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
 
 ## 4. Uso
 

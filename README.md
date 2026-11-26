@@ -2,7 +2,9 @@
 
 ## 1. Descripción
 
-Contador de disparos basado en un sistema acústico de detección. Desarrollado en Python con la librería Librosa (ampliar en caso de poder desarrollar la red neuronal).
+Contadores de disparos basados en: 
+- Un sistema acústico de detección. Desarrollado en Python con la librería _Librosa_ (ampliar en caso de poder desarrollar la red neuronal).
+- Un modelo de _RandomForest_ previamente entrenado con características extraídas del audio de interés con funciones de la librería _pyAudioAnalysis_. 
 
 ## 2. Objetivo científico
 
@@ -15,47 +17,50 @@ Este proyecto utiliza las siguientes librerías de Python:
 * numpy
 * matplotlib
 * librosa
+* pyAudioAnalysis
+* plotly
++ librerías registradas en 'requirements.txt'
 
 **Opción 1: usando uv**
 
 1. Crear un entorno virtual:
 
-uv venv
+        uv venv
 
 2. Activar el entorno:
 
-*Linux/macOS*
+    **Linux/macOS**
 
-source .venv/bin/activate
+        source .venv/bin/activate
 
-*Windows (PowerShell)*
+    **Windows (PowerShell)**
 
-.venv\Scripts\Activate.ps1
+        .venv\Scripts\Activate.ps1
 
 3. Instalar las dependencias:
 
-uv pip install numpy matplotlib librosa
+        uv pip install -r numpy matplotlib librosa pyAudioAnalysis plotly
 
 **Opción 2: usando Conda**
 
 1. Crear un entorno nuevo:
 
-conda create -n audio-env python=3.12
+        conda create -n audio-env python=3.12
 
 2. Activar el entorno:
 
-conda activate audio-env
+        conda activate audio-env
 
 3. Instalar las dependencias:
 
-conda install numpy matplotlib
-pip install librosa
+        conda install numpy matplotlib
+        pip install librosa pyAudioAnalysis plotly
 
 4. Verificación
 
-Comprobar que las librerías se instalaron correctamente:
+    Comprobar que las librerías se instalaron correctamente:
 
-python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
+        python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
 
 ## 4. Uso
 

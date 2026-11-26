@@ -1,108 +1,24 @@
 #!/usr/bin/env python3
-"""Entrena con recortes WAV y busca posibles disparos en otro WAV."""
+"""Entrena modelo de detección de disparos con recortes WAV"""
 
 import argparse
 import csv
-import math
-from pathlib import Path
-
+import joblib
+import json
 import numpy as np
-from scipy.io import wavfile
-from scipy.signal import find_peaks, resample_poly
+import math
+
+from pathlib import Path
+from scipy.signal import find_peaks
 from sklearn.ensemble import RandomForestClassifier
 from pyAudioAnalysis import ShortTermFeatures
+from .utils import leer_wav, energias, recorte
 
 FS = 16000
 FRAME = 160  # 10 ms
 BEFORE = int(0.08 * FS)
 AFTER = int(0.22 * FS)
 N_ESTIMATORS = 200
-
-
-def leer_wav(ruta):
-    """
-    Lee un archivo de audio WAV, normaliza su amplitud a flotantes [-1.0, 1.0],
-    lo convierte a 'mono' si es 'estéreo' y lo remuestrea a la frecuencia fija de 16000 Hz.
-
-    Args:
-        ruta (str o Path): Ubicación del archivo WAV a leer.
-
-    Returns:
-        np.ndarray: Vector unidimensional de tipo float64 con las muestras del audio.
-
-    Raises:
-        ValueError: Si el archivo está vacío, no es finito, tiene un formato 
-                    de datos incompatible o no se puede procesar.
-    """
-    fs, audio = wavfile.read(ruta)
-    if audio.size == 0:
-        raise ValueError(f"WAV vacío: {ruta}")
-    if np.issubdtype(audio.dtype, np.unsignedinteger):
-        # Si el audio está guardado como 'unsigned integer' (sin signo) 
-        # calcula el punto medio del rango de valores posibles normaliza a [-1.0, 1.0]   
-        punto_medio = (np.iinfo(audio.dtype).max + 1) / 2
-        audio = (audio.astype(np.float64) - punto_medio) / punto_medio
-    elif np.issubdtype(audio.dtype, np.signedinteger):   
-        # Si el audio está guardado como 'signed integer' (con signo) convierte 
-        # a 'float64' y normaliza a [-1.0, 1.0]                  
-        audio = audio.astype(np.float64) / (np.iinfo(audio.dtype).max + 1) 
-    elif np.issubdtype(audio.dtype, np.floating): 
-        # Si el audio ya está guardado como tipo 'float' convierte a float64 para consistencia
-        audio = audio.astype(np.float64)          
-    else:
-        raise ValueError(f"Formato WAV no compatible: {ruta}")
-    if audio.ndim == 2:             
-        # Si detecta dos canales (estéreo), calcula el promedio de ambos para 
-        # fusionarlo en un único canal monocromático.
-        audio = audio.mean(axis=1)
-    if audio.ndim != 1 or not np.isfinite(audio).all():
-        raise ValueError(f"Audio inválido: {ruta}")
-    if fs != FS:
-        # Si la frecuencia de muestreo original no es igual a la frecuencia objetivo (FS), 
-        # calcula el Máximo Común Divisor y aplica un filtrado y rediseño polifásico (resample_poly) 
-        # para cambiar el muestreo sin deformar el tono del audio.
-        divisor = math.gcd(fs, FS)
-        audio = resample_poly(audio, FS // divisor, fs // divisor)
-    return audio
-
-
-def energias(audio):
-    """
-    Divide la señal de audio en ventanas de tamaño FRAME y calcula
-    la energía RMS (Root Mean Square) para cada una de ellas.
-
-    Args:
-        audio (np.ndarray): Vector de muestras de audio normalizado.
-
-    Returns:
-        np.ndarray: Vector con los niveles de energía calculados por cuadro.
-    """
-    relleno = (-len(audio)) % FRAME
-    cuadros = np.pad(audio, (0, relleno)).reshape(-1, FRAME) # Rellena con ceros el final del audio y lo reestructura en una matriz cuyas 
-                                                             # filas son ventanas de FRAME muestras.
-    return np.sqrt(np.mean(cuadros ** 2, axis=1))
-
-
-def recorte(audio, muestra):
-    """
-    Extrae un segmento de audio centrado en una muestra específica, aplicando 
-    márgenes fijos de tiempo (BEFORE y AFTER) y rellenando con ceros si el 
-    recorte excede los límites físicos del archivo.
-
-    Args:
-        audio (np.ndarray): Vector completo de muestras de audio.
-        muestra (int): Índice de la muestra central donde ocurre el evento.
-
-    Returns:
-        np.ndarray: Segmento de audio aislado con una longitud fija de muestras.
-    """
-    inicio = muestra - BEFORE
-    fin = muestra + AFTER
-    izquierda = max(0, -inicio)
-    derecha = max(0, fin - len(audio))
-    return np.pad(audio[max(0, inicio):min(len(audio), fin)],
-                  (izquierda, derecha))
-
 
 def caracteristicas(audio, muestra):
     """
@@ -119,7 +35,7 @@ def caracteristicas(audio, muestra):
     Raises:
         ValueError: Si los descriptores extraídos contienen valores indeterminados.
     """
-    segmento = recorte(audio, muestra)
+    segmento = recorte(audio, muestra, BEFORE, AFTER)
     # Función de la librería pyAudioAnalysis que extrae características del segmento de audio en 
     # ventanas de tiempo corto. En este caso, ventanas de 25 ms con un paso de 10 ms.
     f, _ = ShortTermFeatures.feature_extraction(
@@ -153,7 +69,7 @@ def entrenar(carpeta):
             raise ValueError(f"No se encontraron WAV en {carpeta / clase}")
         for ruta in archivos:
             audio = leer_wav(ruta)
-            energia = energias(audio)
+            energia = energias(audio, FRAME)
             if energia.max() == 0:
                 raise ValueError(f"Audio silencioso: {ruta}")
             # Encuentra el bloque con mayor volumen (np.argmax), lo mapea de regreso a su 
@@ -170,7 +86,6 @@ def entrenar(carpeta):
     )
     modelo.fit(xs, ys)
     return modelo
-
 
 def contar_disparos(modelo, audio, salida, umbral, prominencia, separacion):
     """
@@ -218,3 +133,29 @@ def contar_disparos(modelo, audio, salida, umbral, prominencia, separacion):
     print(f"Candidatos: {len(indices)}")
     print(f"Posibles disparos: {total}")
     print(f"Detalle: {salida}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Entrena un modelo de detección de disparos.")
+    parser.add_argument("--carpeta_entrenamiento", type=str, help="Ruta a la carpeta de entrenamiento")
+    parser.add_argument("--carpeta_salida", type=str, help="Ruta para guardar el modelo entrenado")
+    parser.add_argument("--nombre_modelo", type=str, default="modelo.joblib", help="Nombre del archivo del modelo entrenado")
+    args = parser.parse_args()
+
+    carpeta = Path(args.carpeta_entrenamiento)
+    print(f"Entrenando clasificador RandomForest...")
+    modelo = entrenar(carpeta)
+    ruta_salida = Path(args.carpeta_salida) / (args.nombre_modelo + ".joblib")
+    joblib.dump(modelo, ruta_salida)
+    print(f"Modelo entrenado con éxito y guardado en {ruta_salida}.")
+    parametros_RF = {
+        "FS": FS,
+        "FRAME": FRAME,
+        "BEFORE": BEFORE,
+        "AFTER": AFTER
+        }
+    with open(Path(args.carpeta_salida) / 'parametros_RF.json', 'w', encoding='utf-8') as f:
+        json.dump(parametros_RF, f, indent=4)
+    print(f"Parámetros de entrenamiento guardados en {Path(args.carpeta_salida) / 'parametros_RF.json'}")
+
+if __name__ == "__main__":
+    main()

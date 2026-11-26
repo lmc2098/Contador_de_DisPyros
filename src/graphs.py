@@ -470,15 +470,17 @@ def analisis_librosa(times, onset_env, onset_peaks, onset_detect, audio, fs=1600
 
 
 def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_antes_ms=50, t_despues_ms=200):
-    """Muestra una cuadrícula vertical paginada de 10 disparos simultáneos con controles compactos.
+    """
+    Muestra una cuadrícula vertical paginada de 5 disparos simultáneos con posibilidad de reproducir
+    el audio y cambiar la etiqueta del mismo en el CSV del conteo.
 
-    Permite evaluar de un solo vistazo las firmas acústicas de 10 eventos alineados 
-    en el tiempo relativo de su pico (0 ms). Incluye paginación de 10 en 10 (estilo Gmail) 
-    y botones compactos alineados rígidamente al lado de cada señal de audio.
+    Permite evaluar las firmas acústicas de 5 eventos alineados en el tiempo relativo de su pico
+    (0 ms). Incluye paginación de 5 en 5 y botones de reproducción y etiquetado a la derecha de 
+    las formas de onda.
 
     Args:
         ruta_audio (str o Path): Ubicación del archivo de audio WAV original.
-        ruta_csv (str o Path, opcional): Ubicación del reporte CSV con las clasificaciones. 
+        ruta_csv (str o Path, opcional): Ubicación del reporte CSV con las clasificaciones.
             Por defecto es "conteo_disparos.csv".
         t_antes_ms (int, opcional): Milisegundos a extraer antes del pico. Por defecto 50.
         t_despues_ms (int, opcional): Milisegundos a extraer después del pico. Por defecto 200.
@@ -486,7 +488,7 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
     from plotly.subplots import make_subplots
     from pathlib import Path
 
-    # 1. Carga inicial de datos
+    # Carga inicial de datos y remezcla monofónica descriptiva
     fs, audio = wavfile.read(ruta_audio)
     if audio.ndim == 2:
         audio = audio.mean(axis=1)
@@ -505,39 +507,36 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
     muestras_antes = int((t_antes_ms / 1000) * fs)
     muestras_despues = int((t_despues_ms / 1000) * fs)
 
-    # Estado de la paginación y salida de audio oculta en segundo plano
+    # Estado interno del índice de paginación y emisor de audio en segundo plano
     estado_paginacion = {"pagina_actual": 0}
     output_audio_oculto = widgets.Output()
 
-    # Contenedores principales de la UI superior
+    # Componentes de la interfaz de control superior (Estilo Gmail)
     output_interfaz = widgets.Output()
     lbl_paginacion = widgets.Label(value="")
     btn_prev = widgets.Button(description="", icon="chevron-left", layout=widgets.Layout(width='40px', height='30px'))
     btn_next = widgets.Button(description="", icon="chevron-right", layout=widgets.Layout(width='40px', height='30px'))
 
     def renderizar_pagina():
-        """Dibuja dinámicamente el bloque de 5 disparos correspondiente a la página activa."""
+        """Dibuja de forma síncrona el bloque de 5 disparos correspondiente a la página activa."""
         idx_start = estado_paginacion["pagina_actual"] * 5
         idx_end = min(total_eventos, idx_start + 5)
         eventos_visibles = idx_end - idx_start
 
-        # Actualizar texto de navegación estilo Gmail
         lbl_paginacion.value = f"Mostrando los disparos etiquetados: {idx_start + 1}-{idx_end} de {total_eventos}"
         
-        # Habilitar/Deshabilitar flechas según los límites físicos
         btn_prev.disabled = (estado_paginacion["pagina_actual"] == 0)
         btn_next.disabled = (idx_end >= total_eventos)
 
         with output_interfaz:
             output_interfaz.clear_output(wait=True)
 
-            # Inicializar subplots sin títulos de subtramas
-            # Aumentamos el vertical_spacing para dar espacio físico real entre señales
+            # Inicializar matriz de subplots compartiendo el eje de tiempos relativo (0 ms central)
             fig = go.FigureWidget(make_subplots(
-                rows=eventos_visibles, cols=1, 
+                rows=eventos_visibles, cols=1,
                 shared_xaxes=True,
-                vertical_spacing=0.035 
-            ),)
+                vertical_spacing=0.035
+            ))
 
             lista_controles_filas = []
 
@@ -547,33 +546,71 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
                 t_centro = row['tiempo_segundos']
                 clase_inicial = row['clasificacion']
 
+                # Segmentación acústica acotada al entorno del transitorio
                 idx_centro = int(t_centro * fs)
                 start = max(0, idx_centro - muestras_antes)
                 end = min(len(audio), idx_centro + muestras_despues)
                 segmento = audio[start:end]
                 tiempo_relativo_ms = ((np.arange(start, end) / fs) - t_centro) * 1000
 
+                # Trazado de la firma de amplitud
                 fig.add_trace(
-                    go.Scatter(x=tiempo_relativo_ms, y=segmento, mode='lines', 
+                    go.Scatter(x=tiempo_relativo_ms, y=segmento, mode='lines',
                                line=dict(color='#0003A7', width=1.2), showlegend=False),
                     row=n_fila, col=1
                 )
                 
+                # Línea guía discontinua roja de referencia en el centro geométrico (0 ms)
                 fig.add_shape(type="line", x0=0, x1=0, y0=float(np.min(segmento)), y1=float(np.max(segmento)),
                               line=dict(color="rgba(230,0,0,0.5)", width=1, dash="dash"), row=n_fila, col=1)
 
                 fig.update_yaxes(visible=False, row=n_fila, col=1)
                 
+                # Exclusividad de la visualización de etiquetas al eje X de la trama inferior
                 if n_fila == eventos_visibles:
                     fig.update_xaxes(showticklabels=True, title_text="Tiempo relativo al pico (ms)", row=n_fila, col=1)
                 else:
                     fig.update_xaxes(showticklabels=False, row=n_fila, col=1)
 
-                # --- 🛠️ SOLUCIÓN: BOTÓN DE AUDIO ULTRA COMPACTO (Sustituye al reproductor pesado) ---
+                def crear_callback_seleccion(t_centro_original, idx_csv_fila):
+                    """Encapsula el índice físico del CSV para procesar reasignaciones temporales."""
+                    def al_seleccionar_rango(trace, points, state_select):
+                        if state_select is None or state_select.xrange is None:
+                            return
+                        t_min_ms, t_max_ms = state_select.xrange
+                        
+                        # Conversión de coordenadas relativas (ms) a la línea de tiempo absoluta (s)
+                        t_min_abs = t_centro_original + (t_min_ms / 1000)
+                        t_max_abs = t_centro_original + (t_max_ms / 1000)
+                        
+                        idx_min = int(max(0, t_min_abs * fs))
+                        idx_max = min(len(audio), int(t_max_abs * fs))
+                        
+                        if idx_min >= idx_max:
+                            return
+                            
+                        fragmento_ventana = np.abs(audio[idx_min:idx_max])
+                        if len(fragmento_ventana) == 0:
+                            return
+                        idx_pico_relativo = np.argmax(fragmento_ventana)
+                        idx_pico_absoluto = idx_min + idx_pico_relativo
+                        
+                        # Guardar el nuevo tiempo calibrado sobre el CSV y refrescar la pantalla
+                        nuevo_tiempo_seg = float(idx_pico_absoluto / fs)
+                        df_global.loc[idx_csv_fila, 'tiempo_segundos'] = round(nuevo_tiempo_seg, 4)
+                        df_global.to_csv(ruta_csv, index=False)
+                        
+                        renderizar_pagina()
+                    return al_seleccionar_rango
+
+                # Vinculación explícita mediante el índice absoluto de la traza secuencial de la señal
+                fig.data[i].on_selection(crear_callback_seleccion(t_centro, idx_global))
+
+                # Controles de audio para cada fila
                 btn_play_local = widgets.Button(description="Escuchar", icon="play", layout=widgets.Layout(width='120px', height='28px'))
                 
-                # Inyección dinámica de reproducción al hacer clic
                 def crear_callback_audio(seg_datos):
+                    """Asigna de forma aislada el buffer de muestras al emisor central oculto."""
                     def callback_audio(b):
                         with output_audio_oculto:
                             output_audio_oculto.clear_output(wait=True)
@@ -582,7 +619,6 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
                 
                 btn_play_local.on_click(crear_callback_audio(segmento))
 
-                # Botón de mutación optimizado en tamaño
                 btn_mutar = widgets.Button(description="", layout=widgets.Layout(width='95px', height='28px'))
                 
                 def configurar_boton(boton, clase):
@@ -596,6 +632,7 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
                 configurar_boton(btn_mutar, clase_inicial)
 
                 def crear_callback_csv(b_instancia, idx_p_csv):
+                    """Vincula la alteración del string binario en el CSV al botón local."""
                     def callback_clic(b):
                         clase_actual = df_global.loc[idx_p_csv, 'clasificacion']
                         clase_nueva = "otro" if clase_actual == "posible_disparo" else "posible_disparo"
@@ -606,28 +643,34 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
 
                 btn_mutar.on_click(crear_callback_csv(btn_mutar, idx_global))
 
-                # Fila de control limpia de desbordamientos e inmune a comportamientos del navegador
+                # Agrupamiento horizontal inmune a scrolls desbordantes del navegador
                 caja_fila = widgets.HBox(
                     [btn_play_local, btn_mutar], 
                     layout=widgets.Layout(align_items='center', justify_content='flex-start', gap='4px', height='54px', margin='0px')
                 )
                 lista_controles_filas.append(caja_fila)
 
-            # Ajustes globales del lienzo Plotly: ancho a 650px para dar espacio físico real a la botonera
-            # El alto por fila se estira a 48px para emparejar perfectamente la separación vertical
+            # Restricción bidimensional del lienzo gráfico de Plotly
             fig.update_layout(
                 template="plotly_white",
                 height=48 * eventos_visibles + 70, 
                 width=450,  
-                margin=dict(l=10, r=10, t=15, b=45)
+                margin=dict(l=10, r=10, t=15, b=45),
+                dragmode='select'
             )
 
-            # Ensamblar los subplots y el panel rígido sin barras de scroll ocultas
+            # Recorte físico por CSS del canvas de fondo excedente
+            fig_recortada = widgets.Box(
+                [fig], 
+                layout=widgets.Layout(width='450px', max_width='450px', overflow='hidden', margin='0px')
+            )
+
+            # Ensamble paralelo rígido de subplots y botones emparejados
             panel_derecho = widgets.VBox(lista_controles_filas, layout=widgets.Layout(justify_content='flex-start', gap='0px', padding='0px 0 0 5px'))
-            interfaz_grafica = widgets.HBox([fig, panel_derecho], layout=widgets.Layout(align_items='flex-start', margin='0px'))
+            interfaz_grafica = widgets.HBox([fig_recortada, panel_derecho], layout=widgets.Layout(align_items='flex-start', margin='0px'))
             display(interfaz_grafica)
 
-    # 4. Manejadores de clics de la barra de navegación Gmail
+    # Manejadores de clics de la barra de navegación (Paginación de a 5)
     def ir_atras(b):
         if estado_paginacion["pagina_actual"] > 0:
             estado_paginacion["pagina_actual"] -= 1
@@ -641,18 +684,160 @@ def comparador_ondas_disparos(ruta_audio, ruta_csv="conteo_disparos.csv", t_ante
     btn_prev.on_click(ir_atras)
     btn_next.on_click(ir_adelante)
 
-    # 5. Construcción de la barra de herramientas superior
     barra_navegacion = widgets.HBox(
         [btn_prev, btn_next, lbl_paginacion], 
         layout=widgets.Layout(align_items='center', gap='14px', margin='5px 0 10px 15px')
     )
     
-    # 🛠️ SOLUCIÓN: Envolvemos el output de audio en un contenedor HBox centrado horizontalmente
     audio_centrado = widgets.HBox(
         [output_audio_oculto], 
         layout=widgets.Layout(width='100%', justify_content='flex-start', margin='15px 0 0 75px')
     )
     
-    # Despliegue de la estructura completa en Jupyter con el emisor centrado
     display(widgets.VBox([barra_navegacion, output_interfaz, audio_centrado]))
     renderizar_pagina()
+
+
+
+def analizador_espectral_2d(ruta_audio, ruta_csv="conteo_disparos.csv", etiquetas_reales_csv=None, t_antes_ms=50, t_despues_ms=200):
+    """
+    Genera un plano de descriptores 2D comparando los marcadores generados con librosa o RF y 
+    las etiquetas reales (si están disponibles).
+
+    Aísla las ventanas acústicas tanto de los puntos detectados por los algoritmos de detección 
+    como de las anotaciones de las etiquetas reales. Calcula el 'Onset Strength' Máximo y el
+    Centroide Espectral de cada ventana por separado, permitiendo validar visualmente en 2D
+    si los posibles disparos mapeados por el modelo matemático coinciden espacialmente
+    con las muestras reales de control.
+
+    Args:
+        ruta_audio (str o Path): Ubicación del archivo de audio WAV original.
+        ruta_csv (str o Path, opcional): Ubicación del reporte CSV generado por Librosa.
+            Por defecto es "conteo_disparos.csv".
+        etiquetas_reales_csv (str o Path, opcional): Ubicación del CSV de control de laboratorio.
+            Por defecto es None.
+        t_antes_ms (int, opcional): Milisegundos previos al pico para la ventana. Por defecto 50.
+        t_despues_ms (int, opcional): Milisegundos posteriores al pico. Por defecto 200.
+    """
+    from pathlib import Path
+    
+    # Carga de audio y normalización de rango flotante
+    fs, audio = wavfile.read(ruta_audio)
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
+        
+    if np.issubdtype(audio.dtype, np.integer):
+        info_tipo = np.iinfo(audio.dtype)
+        audio = audio.astype(np.float32) / max(abs(info_tipo.min), info_tipo.max)
+        
+    muestras_antes = int((t_antes_ms / 1000) * fs)
+    muestras_despues = int((t_despues_ms / 1000) * fs)
+
+    # Matrices unificadas para consolidar el espacio de fases
+    fuerza_ataque_lista = []
+    centroide_frec_lista = []
+    origen_lista = []
+    tiempos_lista = []
+
+    def extraer_descriptores_de_tiempos(vector_tiempos, nombre_origen):
+        """Función interna para aislar ventanas y calcular descriptores bioacústicos."""
+        for t in vector_tiempos:
+            idx_centro = int(t * fs)
+            start = max(0, idx_centro - muestras_antes)
+            end = min(len(audio), idx_centro + muestras_despues)
+            segmento = audio[start:end]
+            
+            if len(segmento) < 512:
+                continue
+                
+            # Extracción del descriptor temporal: Máxima fuerza de ataque
+            stft_seg = np.abs(librosa.stft(segmento, n_fft=512, hop_length=128))
+            logS = librosa.amplitude_to_db(stft_seg, ref=np.max)
+            onset_env = librosa.onset.onset_strength(S=logS, sr=fs)
+            fuerza_ataque = np.max(onset_env)
+
+            # Extracción del descriptor espectral: Centroide de frecuencias
+            centroide = librosa.feature.spectral_centroid(y=segmento, sr=fs, n_fft=512, hop_length=128)
+            centroide_medio = np.mean(centroide)
+
+            fuerza_ataque_lista.append(fuerza_ataque)
+            centroide_frec_lista.append(centroide_medio)
+            origen_lista.append(nombre_origen)
+            tiempos_lista.append(t)
+
+    # Extracción secuencial desde el CSV del contador
+    ruta_csv = Path(ruta_csv)
+    if ruta_csv.exists():
+        df_contador = pd.read_csv(ruta_csv)
+        disparos_contador = df_contador[df_contador['clasificacion'] == 'posible_disparo']['tiempo_segundos'].values
+        extraer_descriptores_de_tiempos(disparos_contador, "Detecciones contador")
+    else:
+        print(f"⚠️ Advertencia: No se encontró el archivo de Librosa en {ruta_csv}")
+
+    # Extracción secuencial sobre el bloque de datos de control
+    if etiquetas_reales_csv is not None:
+        ruta_reales = Path(etiquetas_reales_csv)
+        if ruta_reales.exists():
+            df_reales = pd.read_csv(ruta_reales)
+            tiempos_reales = df_reales.iloc[:, 0].values
+            extraer_descriptores_de_tiempos(tiempos_reales, "Etiquetas Reales (Lab)")
+        else:
+            print(f"⚠️ Advertencia: No se encontró el archivo de etiquetas reales en {ruta_reales}")
+
+    # Estructuración del DataFrame global de validación espacial
+    df_espacio_fases = pd.DataFrame({
+        'Fuerza_Ataque': fuerza_ataque_lista,
+        'Centroide_Frecuencia_Hz': centroide_frec_lista,
+        'Origen': origen_lista,
+        'Tiempo_s': tiempos_lista
+    })
+
+    if df_espacio_fases.empty:
+        print("❌ Error: No se pudieron extraer características de ninguna de las fuentes.")
+        return
+
+    # Renderizado interactivo del Scatter Plot 2D
+    fig_2d = go.Figure()
+
+    estilos_origen = {
+        "Detecciones contador": dict(color="crimson", marker="x", size=10, name="Detecciones contador ❌"),
+        "Etiquetas Reales (Lab)": dict(color="gold", marker="star", size=13, name="Etiquetas Reales 🌟")
+    }
+
+    for origen_nombre, estilo in estilos_origen.items():
+        sub_df = df_espacio_fases[df_espacio_fases['Origen'] == origen_nombre]
+        if sub_df.empty:
+            continue
+            
+        fig_2d.add_trace(go.Scatter(
+            x=sub_df['Fuerza_Ataque'],
+            y=sub_df['Centroide_Frecuencia_Hz'],
+            mode='markers',
+            name=estilo["name"],
+            marker=dict(
+                color=estilo["color"],
+                size=estilo["size"],
+                symbol=estilo["marker"],
+                line=dict(width=1, color='black')
+            ),
+            hovertemplate='<b>Origen:</b> ' + origen_nombre + '<br>' +
+                          '<b>Tiempo:</b> %{text:.3f} s<br>' +
+                          '<b>Fuerza de Ataque:</b> %{x:.2f}<br>' +
+                          '<b>Centroide Espectral:</b> %{y:.1f} Hz<extra></extra>',
+            text=sub_df['Tiempo_s']
+        ))
+
+    fig_2d.update_layout(
+        title=dict(
+            text="Espacio de Características Espectrales 2D",
+            x=0.5, font=dict(size=16, color="#0003A7", weight='bold')
+        ),
+        xaxis_title="Fuerza del Transitorio de Inicio (Max Onset Strength)",
+        yaxis_title="Centroide Espectral Medio (Frecuencia en Hz)",
+        template="plotly_white",
+        width=850,
+        height=550,
+        legend=dict(x=0.65, y=0.95, bgcolor='rgba(255,255,255,0.85)', bordercolor='rgba(200,200,200,0.5)', borderwidth=1)
+    )
+
+    fig_2d.show()

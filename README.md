@@ -50,9 +50,6 @@ Ejecutar:
 python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
 ```
 
----------------------------------------
-***--- FALTA ACTUALIZAR DE ACÁ PARA ABAJO ---***
----------------------------------------
 ## 4. Uso
 
 ### 4.1. Librosa

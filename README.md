@@ -62,14 +62,19 @@ Este proyecto utiliza las siguientes librerías de Python:
 
         python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
 
+---------------------------------------
+***--- FALTA ACTUALIZAR DE ACÁ PARA ABAJO ---***
+---------------------------------------
 ## 4. Uso
 
-Para realizar un conteo de disparos, debe ejecutarse el archivo ```contador_disparos.py```, dentro de la carpeta ```librosa```. La salida da la cantidad de disparos estimada por el programa y un gráfico que contiene:
+### 4.1. Librosa
+
+Para realizar un conteo de disparos, debe ejecutarse la función archivo ```contador_disparos_librosa```, dentro de la libreria ```contadores.py```. La salida da la cantidad de disparos estimada por el programa y un gráfico que contiene:
 * Señal del audio
 * Picos de intensidad detectados
 * Picos de intensidad clasificados como disparo
 
-Se utiliza como entrada el archivo de audio que se quiere analizar. El archivo se carga modificando la variable ```archivo``` (dentro de ```contador_disparos.py```) por el nombre del archivo de audio que se desea analizar.
+Se utiliza como entrada el archivo de audio que se quiere analizar. El archivo se carga modificando la variable ```audio``` (que recibe ```contador_disparos_librosa```) por el nombre del archivo de audio que se desea analizar.
 
 El formato del archivo puede ser cualquiera que sea compatible con ```soundfile```. Por ejemplo:
 * WAV
@@ -116,7 +121,7 @@ Paso 6 lo realiza ```librosa.util.localmax``` para detectar máximos y ```libros
 
 La eficiencia del contador se analiza ejecutando ```validacion.py```. Se utilizan los archivos ```audio/Audio 1 - Recorte Damian Kuc - Recortado.mp3``` y ```\audios\Masacre de Ramallo - Test\Audio 1 - Etiquetas.txt```. La siguiente imagen contiene los resultados obtenidos.
 
-PENDIENTE SUBIR IMAGEN
+![Etiquetas elaboradas con librosa](deteccion_librosa.png)
 
 Para una secuencia de 105 disparos efectuados, se detectan 96. Esto no quiere decir que todos los sonidos clasificados como disparos sean efectivamente tal. El programa es capaz de detectar todos los disparos que están suficientemente separados temporalmente entre ellos y que no tienen algún sonido de interferencia. Se observa que el programa puede contabilizar interferencias (gritos, golpes, etc.) como disparos, además de no detectar disparos reales durante dicha interferencia. También se observa que cuando los disparos son suficientemente consecutivos, el programa no tiene la resolución temporal suficiente para detectarlos a todos.
 

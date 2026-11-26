@@ -12,55 +12,43 @@ Desarrollar una herramienta capaz de complementar pericias de escenas con dispar
 
 ## 3. Instalación
 
-Este proyecto utiliza las siguientes librerías de Python:
+### Opción 1: usando uv
 
-* numpy
-* matplotlib
-* librosa
-* pyAudioAnalysis
-* plotly
-+ librerías registradas en 'requirements.txt'
+Crear y activar un entorno virtual:
 
-**Opción 1: usando uv**
+```bash
+uv venv
+source .venv/bin/activate
+```
 
-1. Crear un entorno virtual:
+Instalar las dependencias del proyecto:
 
-        uv venv
+```bash
+uv pip install -r requirements.txt
+```
 
-2. Activar el entorno:
+### Opción 2: usando Conda
 
-    **Linux/macOS**
+Crear y activar un entorno:
 
-        source .venv/bin/activate
+```bash
+conda create -n nombre_entorno python=3.12
+conda activate nombre_entorno
+```
 
-    **Windows (PowerShell)**
+Instalar las dependencias:
 
-        .venv\Scripts\Activate.ps1
+```bash
+pip install -r requirements.txt
+```
 
-3. Instalar las dependencias:
+### Verificación
 
-        uv pip install -r numpy matplotlib librosa pyAudioAnalysis plotly
+Ejecutar:
 
-**Opción 2: usando Conda**
-
-1. Crear un entorno nuevo:
-
-        conda create -n audio-env python=3.12
-
-2. Activar el entorno:
-
-        conda activate audio-env
-
-3. Instalar las dependencias:
-
-        conda install numpy matplotlib
-        pip install librosa pyAudioAnalysis plotly
-
-4. Verificación
-
-    Comprobar que las librerías se instalaron correctamente:
-
-        python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
+```bash
+python -c "import numpy, matplotlib, librosa; print('Instalación correcta')"
+```
 
 ---------------------------------------
 ***--- FALTA ACTUALIZAR DE ACÁ PARA ABAJO ---***
@@ -69,14 +57,18 @@ Este proyecto utiliza las siguientes librerías de Python:
 
 ### 4.1. Librosa
 
-Para realizar un conteo de disparos, debe ejecutarse la función archivo ```contador_disparos_librosa```, dentro de la libreria ```contadores.py```. La salida da la cantidad de disparos estimada por el programa y un gráfico que contiene:
+Para realizar un conteo de disparos, debe ejecutarse la función ```contador_disparos_librosa```, dentro de la libreria ```contadores.py```. La salida da la cantidad de disparos estimada por el programa y un gráfico que contiene:
 * Señal del audio
 * Picos de intensidad detectados
 * Picos de intensidad clasificados como disparo
 
-Se utiliza como entrada el archivo de audio que se quiere analizar. El archivo se carga modificando la variable ```audio``` (que recibe ```contador_disparos_librosa```) por el nombre del archivo de audio que se desea analizar.
+Sus argumentos son:
+* ```audio``` (np.ndarray): Vector de muestras de audio largo que se desea auditar.
+* ```salida``` (str o Path, opcional): Ruta del archivo CSV donde se guardará el reporte de detecciones. Por defecto es "conteo_disparos.csv".
+* ```graficar``` (bool, opcional): Indica si se debe renderizar el gráfico estático de subplots en Matplotlib. Por defecto es ```False```.
+* ```etiquetas_reales_csv``` (str o Path, opcional): Ruta del archivo CSV que contiene las anotaciones de laboratorio (disparos reales efectuados) para contrastar los resultados. Por defecto es ```None```.
 
-El formato del archivo puede ser cualquiera que sea compatible con ```soundfile```. Por ejemplo:
+El formato del archivo de audio puede ser cualquiera que sea compatible con ```soundfile```. Por ejemplo:
 * WAV
 * FLAC
 * OGG
@@ -98,11 +90,34 @@ En el caso de utilizar archivos en formato MP3, debe asegurarse que la versión 
 
 Para evaluar la eficiencia del contador de disparos, puede utilizarse ```validacion.py```. El archivo de audio se ingresa de la misma manera que en ```contador_disparos.py```, a la variable ```archivo```. Luego se necesita de un archivo de dos columnas (tiempo, intensidad) que contenga todos los disparos. Este útlimo archivo se carga en la variable ```etiquetas```. La salida devuelve los disparos detectados por el programa, los realmente efectuados y un gráfico que marca en qué instantes se detectaron disparos y en cuáles ocurrieron realmente.
 
+### 4.2. Random Forest
+
+Para utilizar el contador como modelo de Random Forest, debe ejecutarse la función ```contar_disparos_RF```, dentro de la libreria ```contadores.py```. No tiene una salida, sino que genera un archivo .csv donde se guardan los resultados.
+
+Los argumentos son:
+
+* ```audio``` (np.ndarray): Vector de muestras de audio largo que se desea auditar.
+* ```salida``` (str): Ruta del archivo CSV donde se escribirá el reporte detallado.
+* ```umbral``` (float): Probabilidad mínima (0.0 a 1.0) para validar un disparo positivo.
+* ```prominencia``` (float): Porcentaje de la energía máxima requerido para detectar un pico de sonido.
+* ```separacion``` (float): Tiempo de espera mínimo en segundos entre detecciones sucesivas.
+* ```etiquetas_reales_csv``` (str): Ruta del archivo CSV con las etiquetas reales de disparos.
+
+El formato del archivo de audio debe ser .wav.
+
 ## 5. Ejemplo de ejecución
 
-La carpeta ```audios``` contiene un audio de la Masacre de Ramallo para probar el contador de disparos (```Audio 1 - Recorte Damian Kuc - Recortado.mp3```). Utilice ese archivo para ejecutar ```contador_disparos.py```. Modifique la variable ```archivo``` dentro de ```contador_disparos.py``` por  ```audio/Audio 1 - Recorte Damian Kuc - Recortado.mp3``` y ejecute el programa.
+El archivo ```ejecuciones_local.ipynb``` contiene un posible procedimiento para utilizar los dos modelos de contadores desarrollados. Se utilizan como datos los archivos que se encuentran en la carpeta ```audios```. Puede modificar las variables de la primera celda si desea, las cuales definen rutas de archivos. En particular, puede modificar:
+* ```audio_ramallo```: Ruta del archivo de audio a analizar
+* ```salida_RF```: Ruta del archivo de salida para el contador Random Forest
+* ```salida_librosa```: Ruta del archivo de salida para el contador desarrollado con Librosa.
+* ```etiquetas_reales_csv```: Ruta del archivo CSV que contiene las anotaciones de laboratorio (disparos reales efectuados) para contrastar los resultados.
+
+En caso de que no disponga de audios y de un archivo con disparos etiquetados, solamente debe editar (no es obligatorio, puede dejar los valores que vienen por defecto) ```salida_RF``` y ```salida_librosa```.
 
 ## 6. Metodología
+
+### 6.1. Librosa
 
 Flujo del programa:
 1. Lectura del archivo de audio
@@ -116,6 +131,10 @@ Flujo del programa:
 Paso 4 y 5 los realiza automáticamente ```librosa.onset.onset_strenght```.
 
 Paso 6 lo realiza ```librosa.util.localmax``` para detectar máximos y ```librosa.onset.onset_detect``` para filtrar los disparos.
+
+### 6.2. Modelo con Random Forest
+
+PENDIENTE
 
 ## 7. Validación
 
